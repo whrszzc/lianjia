@@ -36,7 +36,7 @@ from email.header import Header
 ############ 全局变量初始化 ##############
 HEADERS = dict()
 # 并发线程数
-NUM_THREADS = 5
+NUM_THREADS = None
 # 城市选择
 city_dict = {
     "成都": "cd",
@@ -53,34 +53,10 @@ city_dict = {
 PRINT = False
 # 伪造User-Agent库初始化
 ua = UserAgent()
-
-# 代理设置
-PROXY_HOST = "proxy.abuyun.com"
-PROXY_PORT = "9020"
-PROXY_USERNAME = 'HL9946L10868L0ID'
-PROXY_PASSWORD = 'A329CEFABD0A7067'
-
-def gen_proxies_from_cert(proxy_user, proxy_password):
-    proxy_meta = "http://%(user)s:%(pass)s@%(host)s:%(port)s" % {
-        "host" : PROXY_HOST,
-        "port" : PROXY_PORT,
-        "user" : proxy_user,
-        "pass" : proxy_password
-    }
-
-    proxies = {
-        "http"  : proxy_meta,
-        "https" : proxy_meta
-    }
-
-    return proxies
-
-abuyun_proxies = gen_proxies_from_cert(PROXY_USERNAME, PROXY_PASSWORD)
-
-# 使用代理
-# proxies = abuyun_proxies
 # 不使用代理
 proxies = None
+WORKPATH="/home/frank/workspace/lianjia/data"
+CITY = city_dict["北京"]
 
 
 """ HTTP GET 操作封装 """
@@ -164,11 +140,11 @@ def get_esf_from_district(city, district):
 def get_esf_id_in_price(city, district, price):
     http_url = "http://{}.lianjia.com/ershoufang/{}/p{}".format(city, district, price)
     bs_obj = get_bs_obj_from_url(http_url)
+    total_esf_num = 0
     try:
         total_esf_num = int(bs_obj.find("h2", {"class": "total fl"}).find("span").get_text())
     except Exception as e:
         print("    price {} get error.".format(price))
-        total_esf_num = 0
         pass
     #print("------price {} total : {}---".format(price, total_esf_num))
     esf_list = []
@@ -486,7 +462,8 @@ def addimg(src, imgid):
 
 def send_email(content, filename):
     sender = '565087339@qq.com'
-    receivers = ['565087339@qq.com', '804180663@qq.com']
+    receivers = ['565087339@qq.com']
+    #receivers = ['565087339@qq.com', '804180663@qq.com', 'hanjin0602@163.com']
     key = open('../key', 'r').read()
 
     message = MIMEMultipart()
@@ -523,104 +500,104 @@ def get_tongji_plot(filename):
         print("get tongji plot failed", e)
     return
 
-###########################################################
-# 总共N个步骤，依次运行。
-# 运行第一步的时候，把其余几步的代码注释掉，依次类推
-###########################################################
+def main():
+    ###########################################################
+    # 总共N个步骤，依次运行。
+    # 运行第一步的时候，把其余几步的代码注释掉，依次类推
+    ###########################################################
 
-# set city
-CITY = city_dict["北京"]
+    os.chdir(WORKPATH)
 
-path="/home/frank/workspace/pyspider/Lianjia_House_Info/data"
-os.chdir(path)
+    # 1. make new dir
+    print("\n1. getting date info...")
+    today = datetime.date.today()
+    yesterday = today - datetime.timedelta(days=1)
+    new_str = today.strftime('%Y-%m-%d')
+    old_str = yesterday.strftime('%Y-%m-%d')
+    new_file = "{}_info_{}.xlsx".format(CITY, new_str)
+    old_file = "{}_info_{}.xlsx".format(CITY, old_str)
+    print("today: {}, yesterday: {}.".format(new_str, old_str))
 
-# 1. make new dir
-print("\n1. getting date info...")
-today = datetime.date.today()
-yesterday = today - datetime.timedelta(days=1)
-new_str = today.strftime('%Y-%m-%d')
-old_str = yesterday.strftime('%Y-%m-%d')
-new_file = "{}_info_{}.xlsx".format(CITY, new_str)
-old_file = "{}_info_{}.xlsx".format(CITY, old_str)
-print("today: {}, yesterday: {}.".format(new_str, old_str))
+    # 2. get ershoufang id of the city
+    print("\n2.getting ershoufang list...")
+    esf_list = get_esf_of_city(CITY)
+    with open("{}_list_{}.txt".format(CITY, new_str), mode="w") as f:
+        for esf in esf_list:
+            f.write(esf + "\n")
+    print("ershoufang list write finished.")
 
-# 2. get ershoufang id of the city
-print("\n2.getting ershoufang list...")
-esf_list = get_esf_of_city(CITY)
-with open("{}_list_{}.txt".format(CITY, new_str), mode="w") as f:
-    for esf in esf_list:
-        f.write(esf + "\n")
-print("ershoufang list write finished.")
+    # 3. get ershoufang info
+    print("\n3. getting ershoufang info...")
+    with open("{}_list_{}.txt".format(CITY, new_str), mode="r") as f:
+        esf_list = [int(line[:-1]) for line in f.readlines()]
+    print("get ershoufang info start...")
+    df_esf_info = get_esf_info_from_esf_list(CITY, esf_list)
+    writer = pd.ExcelWriter(new_file)
+    df_esf_info.to_excel(writer, "total")
+    writer.save()
+    try:
+       os.remove("{}_list_{}.txt".format(CITY, new_str))
+    except Exception as e:
+        pass
+    print("ershoufang info write finished.")
 
-# 3. get ershoufang info
-print("\n3. getting ershoufang info...")
-with open("{}_list_{}.txt".format(CITY, new_str), mode="r") as f:
-    esf_list = [int(line[:-1]) for line in f.readlines()]
-print("get ershoufang info start...")
-df_esf_info = get_esf_info_from_esf_list(CITY, esf_list)
-writer = pd.ExcelWriter(new_file)
-df_esf_info.to_excel(writer, "total")
-writer.save()
-try:
-   os.remove("{}_list_{}.txt".format(CITY, new_str))
-except Exception as e:
-    pass
-print("ershoufang info write finished.")
+    # 4. find new ershoufang list and info
+    print("\n4. getting different ershoufang list...")
+    df_esf_info = pd.read_excel(new_file, sheet_name="total", index_col=0)
+    new_esf_list = df_esf_info.index.values
+    df_esf_info = pd.read_excel(old_file, sheet_name="total", index_col=0)
+    old_esf_list = df_esf_info.index.values
+    add_list, remove_list, same_list = compare_two_list(new_esf_list, old_esf_list)
+    print("different ershoufang list finished.")
 
-# 4. find new ershoufang list and info
-print("\n4. getting different ershoufang list...")
-df_esf_info = pd.read_excel(new_file, sheet_name="total", index_col=0)
-new_esf_list = df_esf_info.index.values
-df_esf_info = pd.read_excel(old_file, sheet_name="total", index_col=0)
-old_esf_list = df_esf_info.index.values
-add_list, remove_list, same_list = compare_two_list(new_esf_list, old_esf_list)
-print("different ershoufang list finished.")
+    # 5. get new ershoufang today
+    print("\n5. getting new ershoufang info...")
+    df_esf_info = pd.read_excel(new_file, sheet_name="total", index_col=0)
+    df_esf_added = df_esf_info.loc[add_list]
+    writer = pd.ExcelWriter(new_file)
+    excel_add_sheet(df_esf_added, writer, "新上")
+    print("new ershoufang info write finished.")
 
-# 5. get new ershoufang today
-print("\n5. getting new ershoufang info...")
-df_esf_info = pd.read_excel(new_file, sheet_name="total", index_col=0)
-df_esf_added = df_esf_info.loc[add_list]
-writer = pd.ExcelWriter(new_file)
-excel_add_sheet(df_esf_added, writer, "新上")
-print("new ershoufang info write finished.")
+    # 6. get removed ershoufang today
+    print("\n6. getting removed ershoufang info...")
+    df_esf_info = pd.read_excel(old_file, sheet_name="total", index_col=0)
+    df_esf_removed = df_esf_info.loc[remove_list]
+    writer = pd.ExcelWriter(new_file)
+    excel_add_sheet(df_esf_removed, writer, "下架")
+    print("removed ershoufang info write finished.")
 
-# 6. get removed ershoufang today
-print("\n6. getting removed ershoufang info...")
-df_esf_info = pd.read_excel(old_file, sheet_name="total", index_col=0)
-df_esf_removed = df_esf_info.loc[remove_list]
-writer = pd.ExcelWriter(new_file)
-excel_add_sheet(df_esf_removed, writer, "下架")
-print("removed ershoufang info write finished.")
+    # 7. get price changed ershoufang today
+    print("\n7. getting price changed ershoufang info...")
+    new_esf_info = pd.read_excel(new_file, sheet_name="total", index_col=0)
+    old_esf_info = pd.read_excel(old_file, sheet_name="total", index_col=0)
+    df_jiang, df_zhang = get_price_changed_esf_info(same_list, new_esf_info, old_esf_info)
+    writer = pd.ExcelWriter(new_file)
+    excel_add_sheet(df_jiang, writer, "降价")
+    excel_add_sheet(df_zhang, writer, "涨价")
+    print("price changed ershoufang info write finished.")
 
-# 7. get price changed ershoufang today
-print("\n7. getting price changed ershoufang info...")
-new_esf_info = pd.read_excel(new_file, sheet_name="total", index_col=0)
-old_esf_info = pd.read_excel(old_file, sheet_name="total", index_col=0)
-df_jiang, df_zhang = get_price_changed_esf_info(same_list, new_esf_info, old_esf_info)
-writer = pd.ExcelWriter(new_file)
-excel_add_sheet(df_jiang, writer, "降价")
-excel_add_sheet(df_zhang, writer, "涨价")
-print("price changed ershoufang info write finished.")
+    # 8. get statistical information
+    print("\n8. getting statistical information")
+    info = get_tongji_info(CITY, new_file)
+    old_info = pd.read_excel(old_file, sheet_name="统计", index_col=0)
+    info = info.append(old_info)
+    writer = pd.ExcelWriter(new_file)
+    writer.book = load_workbook(writer.path)
+    info.to_excel(writer, "统计", index_label='日期')
+    writer.close()
+    print("statistical information finished.")
 
-# 8. get statistical information
-print("\n8. getting statistical information")
-info = get_tongji_info(CITY, new_file)
-old_info = pd.read_excel(old_file, sheet_name="统计", index_col=0)
-info = info.append(old_info)
-writer = pd.ExcelWriter(new_file)
-writer.book = load_workbook(writer.path)
-info.to_excel(writer, "统计", index_label='日期')
-writer.close()
-print("statistical information finished.")
+    # 9. get plot of statistical information
+    print("\n9. getting plot of statistical information")
+    get_tongji_plot(new_file)
+    print("statistical information plot finished.")
 
-# 9. get plot of statistical information
-print("\n9. getting plot of statistical information")
-get_tongji_plot(new_file)
-print("statistical information plot finished.")
+    # 10. send email with the new file
+    print("\n10. sending email with the data...")
+    info = get_tongji_info(CITY, new_file)
+    content = get_email_content(info)
+    send_email(content, new_file)
+    print("send email finished.")
 
-# 10. send email with the new file
-print("\n10. sending email with the data...")
-info = get_tongji_info(CITY, new_file)
-content = get_email_content(info)
-send_email(content, new_file)
-print("send email finished.")
+if __name__ == "__main__":
+    main()
