@@ -406,6 +406,7 @@ def get_lianjia_fangjia_info(city):
 def get_tongji_info(city, filename):
     lj_new, lj_ren, lj_kan = get_lianjia_fangjia_info(city)
     chengjiao = get_chengjiao_yesterday(city)
+    new_str = datetime.date.today().strftime('%Y-%m-%d')
 
     total_info = pd.read_excel(filename, sheet_name="total", index_col=0)
     total_list = total_info.index.values
