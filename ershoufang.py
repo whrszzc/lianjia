@@ -68,8 +68,8 @@ def get_bs_obj_from_url(http_url):
         try:
             if PRINT:
                 print("正在获取 {}".format(http_url))
-            r = requests.get(http_url, headers=HEADERS, proxies=proxies)
-            bs_obj = BeautifulSoup(r.text, "html.parser")
+            r = requests.get(http_url, headers=HEADERS, proxies=proxies, timeout=3)
+            bs_obj = BeautifulSoup(r.text, "lxml")
             done = True
         except Exception as e:
             if PRINT:
@@ -501,6 +501,75 @@ def get_tongji_plot(filename):
         print("get tongji plot failed", e)
     return
 
+def get_esf_location_by_index(index, http_url):
+    #print("index {} start".format(index))
+    lng = 0.0
+    lat = 0.0
+    bs_obj = get_bs_obj_from_url(http_url)
+    if bs_obj is None:
+        print("get location failed, index={}".format(index))
+        return index, lng, lat
+    try:
+        lng = float(bs_obj.find('lng').get_text())
+        lat = float(bs_obj.find('lat').get_text())
+    except Exception as e:
+        print("get lng/lat failed. bs_obj={}".format(bs_obj))
+        pass
+    #print("index {} end".format(index))
+
+    return index, lng, lat
+
+def get_esf_location(filename):
+    ak = open('../ak', 'r').read().replace('\n', '')
+    wb = load_workbook(filename)
+    ws = wb.get_sheet_by_name('total')
+    max_row = ws.max_row
+    max_col = ws.max_column
+    ws.cell(row=1, column=max_col+1, value='经度')
+    ws.cell(row=1, column=max_col+2, value='纬度')
+    count = 0
+
+    with futures.ThreadPoolExecutor(max_workers=None) as executor:
+        future_list = []
+        for index in range(2, max_row+1):
+            chengqu = ws.cell(row=index, column=3).value
+            xiaoqu  = ws.cell(row=index, column=5).value
+            location = '北京市{}区{}'.format(chengqu, xiaoqu)
+            if location is None:
+                print("get location failed, index={}".format(index))
+                continue
+            http_url = 'http://api.map.baidu.com/geocoder/v2/?address={}&ak={}'.format(location, ak)
+            future_list.append(executor.submit(get_esf_location_by_index, index, http_url))
+        fail_list = []
+        for future in futures.as_completed(future_list):
+            idx, lng, lat = future.result()
+            if lng == 0.0:
+                fail_list.append(idx)
+            else:
+                ws.cell(row=idx, column=max_col+1).value=format(lng, '.6f')
+                ws.cell(row=idx, column=max_col+2).value=format(lat, '.6f')
+                count += 1
+                sys.stdout.write("\rget location info: {}/{}...".format(count, max_row-1))
+        for idx in fail_list:
+            chengqu = ws.cell(row=index, column=3).value
+            xiaoqu  = ws.cell(row=index, column=5).value
+            location = '北京市{}区{}'.format(chengqu, xiaoqu)
+            if location is None:
+                print("get location failed, index={}".format(index))
+                continue
+            http_url = 'http://api.map.baidu.com/geocoder/v2/?address={}&ak={}'.format(location, ak)
+            _, lng, lat = get_esf_location_by_index(idx, http_url)
+            ws.cell(row=idx, column=max_col+1).value=format(lng, '.6f')
+            ws.cell(row=idx, column=max_col+2).value=format(lat, '.6f')
+            count += 1
+            sys.stdout.write("\rget location info: {}/{}...".format(count, max_row-1))
+        print("done.")
+
+    wb.save(filename)
+    return
+
+
+
 def main():
     ###########################################################
     # 总共N个步骤，依次运行。
@@ -599,6 +668,11 @@ def main():
     content = get_email_content(info)
     send_email(content, new_file)
     print("send email finished.")
+
+    # 11. getting location information
+    print("\n11. getting location information...")
+    get_esf_location(new_file)
+    print("get location finished.")
 
 if __name__ == "__main__":
     main()
