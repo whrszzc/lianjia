@@ -153,8 +153,12 @@ def get_esf_id_in_price(city, district, price):
         print("    price {} finish---done.".format(price))
         return esf_list
 
-    page_box = bs_obj.find("div", {"class": "page-box house-lst-page-box"})
-    total_pages = int(json.loads(page_box.attrs["page-data"])["totalPage"])
+    try:
+        page_box = bs_obj.find("div", {"class": "page-box house-lst-page-box"})
+        total_pages = int(json.loads(page_box.attrs["page-data"])["totalPage"])
+    except Exception as e:
+        print("    price {} page get error.".format(price))
+        return esf_list
 
     with futures.ThreadPoolExecutor(max_workers=NUM_THREADS) as executor:
         future_list = []
@@ -464,7 +468,6 @@ def addimg(src, imgid):
 def send_email(content, filename):
     sender = '565087339@qq.com'
     receivers = ['565087339@qq.com']
-    #receivers = ['565087339@qq.com', '804180663@qq.com', 'hanjin0602@163.com']
     key = open('../key', 'r').read()
 
     message = MIMEMultipart()
@@ -577,6 +580,8 @@ def main():
     ###########################################################
 
     os.chdir(WORKPATH)
+    log_file = open('../log', 'a')
+    sys.stdout = log_file
 
     # 1. make new dir
     print("\n1. getting date info...")
