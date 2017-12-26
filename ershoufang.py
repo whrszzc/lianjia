@@ -497,7 +497,8 @@ def get_tongji_plot(filename):
     info = pd.read_excel(filename, sheet_name="统计", index_col=0)
     info = info.sort_index()
     try:
-        info.plot(use_index=True, y=['总数', '均价', '成交'], marker='o', subplots=True, grid=True)
+        info.plot(x=pd.to_datetime(info.index), y=['总数', '均价', '成交'],
+                  marker='o', subplots=True, grid=True, figsize=(12,6))
         #plt.title('北京可售房源总数')
         plt.savefig('total.jpg')
     except Exception as e:
@@ -580,8 +581,9 @@ def main():
     ###########################################################
 
     os.chdir(WORKPATH)
-    log_file = open('../log', 'a')
-    sys.stdout = log_file
+    if not PRINT:
+        log_file = open('../log', 'a')
+        sys.stdout = log_file
 
     # 1. make new dir
     print("\n1. getting date info...")
