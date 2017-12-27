@@ -226,6 +226,9 @@ def get_esf_info(city, esf_id):
                 return esf_id, df
 
             total_price = bs_obj.find("span", {"class": "total"}).get_text()
+            if not is_number(total_price):
+                return esf_id, df
+
             unit_price = bs_obj.find("div", {"class": "unitPrice"}).get_text().replace("元/平米", "")
             huxing = bs_obj.find("div", {"class": "room"}).find("div", {"class": "mainInfo"}).get_text()
             xiaoqu = bs_obj.find("div", {"class": "communityName"}).find("a").get_text()
@@ -241,6 +244,9 @@ def get_esf_info(city, esf_id):
             louceng = None if "所在楼层" not in base else base.split("所在楼层")[1].split("(")[0]
             zonglouceng = None if "所在楼层" not in base else base.split("(共")[1].split("层")[0]
             jianzhumianji = None if "建筑面积" not in base else base.split("建筑面积")[1].split("㎡")[0]
+            if not is_number(jianzhumianji):
+                return esf_id, df
+
             huxingjiegou = None if "户型结构" not in base else base.split("户型结构")[1].split("\n")[0]
             if "套内面积" not in base:
                 taoneimianji = None
@@ -423,10 +429,10 @@ def get_tongji_info(city, filename):
     zhang_info = pd.read_excel(filename, sheet_name="涨价", index_col=0)
     zhang_list = zhang_info.index.values
     junjia     = format(sum(total_info['总价']) * 10000 / sum(total_info['建筑面积']), '.2f')
-    jiangfu    = jiang_info['跌幅'].str.strip("%").astype(float)/100
-    junjiang   = format(sum(jiangfu) / len(jiangfu), '.2%')
-    zhangfu    = zhang_info['涨幅'].str.strip("%").astype(float)/100
-    junzhang   = format(sum(zhangfu) / len(zhangfu), '.2%')
+    jiangfu    = (jiang_info['跌幅'].str.strip("%").astype(float)/100) if len(jiang_list) else 0
+    junjiang   = (format(sum(jiangfu) / len(jiangfu), '.2%')) if len(jiang_list) else 0
+    zhangfu    = (zhang_info['涨幅'].str.strip("%").astype(float)/100) if len(zhang_list) else 0
+    junzhang   = (format(sum(zhangfu) / len(zhangfu), '.2%')) if len(zhang_list) else 0
 
     info = pd.DataFrame(index=[new_str],
                         data=[[len(total_list), junjia, chengjiao,
@@ -671,15 +677,18 @@ def main():
 
     # 10. send email with the new file
     print("\n10. sending email with the data...")
-    info = get_tongji_info(CITY, new_file)
+    #info = get_tongji_info(CITY, new_file)
+    info = pd.read_excel(new_file, sheet_name='统计', index_col=0)
     content = get_email_content(info)
     send_email(content, new_file)
     print("send email finished.")
 
+    '''
     # 11. getting location information
     print("\n11. getting location information...")
     get_esf_location(new_file)
     print("get location finished.")
+    '''
 
 if __name__ == "__main__":
     main()
