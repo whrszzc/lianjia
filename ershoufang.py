@@ -118,6 +118,21 @@ def get_district_from_city(city):
 
     return district_list
 
+def get_district_name_from_city(city):
+    print("---get {} districts---".format(city))
+    city_url = "http://{}.lianjia.com".format(city)
+    http_url = city_url + "/ershoufang"
+    bs_obj = get_bs_obj_from_url(http_url)
+
+    parent_div = bs_obj.find("div", {"data-role": "ershoufang"})
+    a_list = parent_div.find_all("a")
+
+    name_list = [a.get_text() for a in a_list
+                              if a.attrs['href'].startswith("/ershoufang")]
+
+    print("---total {} districts---".format(len(name_list)))
+    return name_list
+
 def get_esf_from_district(city, district):
     http_url = "http://{}.lianjia.com/ershoufang/{}".format(city, district)
     bs_obj = get_bs_obj_from_url(http_url)
@@ -341,10 +356,11 @@ def compare_two_list(new_esf_list, old_esf_list):
             remove_list.append(esf_id)
     return add_list, remove_list, same_list
 
-def excel_add_sheet(dataframe, excelwriter, sheetname):
+def excel_add_sheet(dataframe, filename, sheetname, indexname):
+    excelwriter = pd.ExcelWriter(filename)
     book = load_workbook(excelwriter.path)
     excelwriter.book = book
-    dataframe.to_excel(excelwriter, sheetname, index_label='ID')
+    dataframe.to_excel(excelwriter, sheetname, index_label=indexname)
     excelwriter.close()
     return
 
@@ -434,14 +450,21 @@ def get_tongji_info(city, filename):
     zhangfu    = (zhang_info['涨幅'].str.strip("%").astype(float)/100) if len(zhang_list) else 0
     junzhang   = (format(sum(zhangfu) / len(zhangfu), '.2%')) if len(zhang_list) else 0
 
-    info = pd.DataFrame(index=[new_str],
-                        data=[[len(total_list), junjia, chengjiao,
-                               len(new_list), len(rm_list), len(jiang_list),
-                               junjiang, len(zhang_list), junzhang, lj_new,
-                               lj_ren, lj_kan]],
-                        columns=['总数', '均价', '成交', '上架', '下架',
-                                 '降价', '降幅', '涨价', '涨幅', '新上',
-                                 '新客户', '带看'])
+    data=[[len(total_list), junjia, chengjiao, len(new_list), len(rm_list),
+           len(jiang_list), junjiang, len(zhang_list), junzhang, lj_new,
+           lj_ren, lj_kan]]
+    columns=['总数', '均价', '成交', '上架', '下架', '降价', '降幅', '涨价',
+             '涨幅', '新上', '新客户', '带看']
+
+    name_list = get_district_name_from_city(city)
+    for name in name_list:
+        chengqu = total_info[total_info['城区']==name]
+        avg_price = format(sum(chengqu['总价']) * 10000 /
+                           sum(chengqu['建筑面积']), '.2f') if len(chengqu) else 0
+        data[0].append(avg_price)
+        columns.append(name)
+
+    info = pd.DataFrame(index=[new_str], data=data, columns=columns)
 
     return info
 
@@ -480,9 +503,12 @@ def send_email(content, filename):
     message['From'] = sender
     message['Subject'] = Header(filename, 'utf-8')
     #message.attach(MIMEText(content, 'plain', 'utf-8'))
-    html = '<p>{}</p><p><img src="cid:image1"></p>'.format(content.replace('\n', '<br>'))
+    html  = '<p>{}</p>'.format(content.replace('\n', '<br>'))
+    html += '<p><img src="cid:image1"></p>'
+    html += '<p><img src="cid:image2"></p>'
     message.attach(MIMEText(html, 'html', 'utf-8'))
     message.attach(addimg("total.jpg","image1"))
+    message.attach(addimg("chengqu.jpg","image2"))
 
     att = MIMEText(open(filename, 'rb').read(), 'base64', 'utf-8')
     att["Content-Type"] = 'application/octet-stream'
@@ -504,9 +530,13 @@ def get_tongji_plot(filename):
     info = info.sort_index()
     try:
         info.plot(x=pd.to_datetime(info.index), y=['总数', '均价', '成交'],
-                  marker='o', subplots=True, grid=True, figsize=(12,6))
-        #plt.title('北京可售房源总数')
-        plt.savefig('total.jpg')
+                  marker='o', subplots=True, grid=True, figsize=(12,9))
+        plt.savefig('total.jpg', bbox_inches='tight')
+
+        name_list = get_district_name_from_city(CITY)
+        info.plot(x=pd.to_datetime(info.index), y=name_list,
+                  marker='o', subplots=True, grid=True, figsize=(12,3*len(name_list)))
+        plt.savefig('chengqu.jpg', bbox_inches='tight')
     except Exception as e:
         print("get tongji plot failed", e)
     return
@@ -637,16 +667,14 @@ def main():
     print("\n5. getting new ershoufang info...")
     df_esf_info = pd.read_excel(new_file, sheet_name="total", index_col=0)
     df_esf_added = df_esf_info.loc[add_list]
-    writer = pd.ExcelWriter(new_file)
-    excel_add_sheet(df_esf_added, writer, "新上")
+    excel_add_sheet(df_esf_added, new_file, "新上", "ID")
     print("new ershoufang info write finished.")
 
     # 6. get removed ershoufang today
     print("\n6. getting removed ershoufang info...")
     df_esf_info = pd.read_excel(old_file, sheet_name="total", index_col=0)
     df_esf_removed = df_esf_info.loc[remove_list]
-    writer = pd.ExcelWriter(new_file)
-    excel_add_sheet(df_esf_removed, writer, "下架")
+    excel_add_sheet(df_esf_removed, new_file, "下架", "ID")
     print("removed ershoufang info write finished.")
 
     # 7. get price changed ershoufang today
@@ -654,9 +682,8 @@ def main():
     new_esf_info = pd.read_excel(new_file, sheet_name="total", index_col=0)
     old_esf_info = pd.read_excel(old_file, sheet_name="total", index_col=0)
     df_jiang, df_zhang = get_price_changed_esf_info(same_list, new_esf_info, old_esf_info)
-    writer = pd.ExcelWriter(new_file)
-    excel_add_sheet(df_jiang, writer, "降价")
-    excel_add_sheet(df_zhang, writer, "涨价")
+    excel_add_sheet(df_jiang, new_file, "降价", "ID")
+    excel_add_sheet(df_zhang, new_file, "涨价", "ID")
     print("price changed ershoufang info write finished.")
 
     # 8. get statistical information
@@ -664,10 +691,7 @@ def main():
     info = get_tongji_info(CITY, new_file)
     old_info = pd.read_excel(old_file, sheet_name="统计", index_col=0)
     info = info.append(old_info)
-    writer = pd.ExcelWriter(new_file)
-    writer.book = load_workbook(writer.path)
-    info.to_excel(writer, "统计", index_label='日期')
-    writer.close()
+    excel_add_sheet(info, new_file, "统计", "日期")
     print("statistical information finished.")
 
     # 9. get plot of statistical information
