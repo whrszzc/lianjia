@@ -383,9 +383,9 @@ def get_price_changed_esf_info(same_list, new_esf_info, old_esf_info):
                 df_zhang = df_zhang.append(new_info)
             elif new_price < old_price:
                 new_info.insert(loc=6, column="原总价", value=old_price)
-                new_info.insert(loc=7, column="跌价", value=(old_price-new_price))
+                new_info.insert(loc=7, column="降价", value=(old_price-new_price))
                 diefu=format(((old_price-new_price)/old_price), '.2%')
-                new_info.insert(loc=8, column="跌幅", value=diefu)
+                new_info.insert(loc=8, column="降幅", value=diefu)
                 new_info.insert(loc=10, column="原单价", value=old_unit_price)
                 df_jiang = df_jiang.append(new_info)
             else:
@@ -445,7 +445,7 @@ def get_tongji_info(city, filename):
     zhang_info = pd.read_excel(filename, sheet_name="涨价", index_col=0)
     zhang_list = zhang_info.index.values
     junjia     = format(sum(total_info['总价']) * 10000 / sum(total_info['建筑面积']), '.2f')
-    jiangfu    = (jiang_info['跌幅'].str.strip("%").astype(float)/100) if len(jiang_list) else 0
+    jiangfu    = (jiang_info['降幅'].str.strip("%").astype(float)/100) if len(jiang_list) else 0
     junjiang   = (format(sum(jiangfu) / len(jiangfu), '.2%')) if len(jiang_list) else 0
     zhangfu    = (zhang_info['涨幅'].str.strip("%").astype(float)/100) if len(zhang_list) else 0
     junzhang   = (format(sum(zhangfu) / len(zhangfu), '.2%')) if len(zhang_list) else 0
