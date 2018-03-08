@@ -50,7 +50,7 @@ city_dict = {
 }
 
 # 是否打印HTTP错误
-PRINT = False
+PRINT = True if ((len(sys.argv) > 1) and (sys.argv[1] == 'true')) else False
 # 伪造User-Agent库初始化
 ua = UserAgent()
 # 不使用代理
@@ -136,9 +136,18 @@ def get_district_name_from_city(city):
 def get_esf_from_district(city, district):
     http_url = "http://{}.lianjia.com/ershoufang/{}".format(city, district)
     bs_obj = get_bs_obj_from_url(http_url)
-    total_esf_num = int(bs_obj.find("h2", {"class": "total fl"}).find("span").get_text())
-    print("---district {} total ershoufang numbers: {}---".format(district, total_esf_num))
     esf_list = []
+
+    try:
+        total_esf_num = int(bs_obj.find("h2", {"class": "total fl"}).find("span").get_text())
+    except Exception as e:
+        #try again
+        try:
+            bs_obj = get_bs_obj_from_url(http_url)
+            total_esf_num = int(bs_obj.find("h2", {"class": "total fl"}).find("span").get_text())
+        except Exception as e:
+            return esf_list
+    print("---district {} total ershoufang numbers: {}---".format(district, total_esf_num))
 
     if total_esf_num == 0:
         print("---district {} total get {}/{}---\n".format(district, len(esf_list), total_esf_num))
@@ -225,6 +234,7 @@ def get_esf_of_city(city):
     for district in district_list:
         esf_of_district = get_esf_from_district(city, district)
         esf_list += esf_of_district
+    esf_list = sorted(set(esf_list), key=esf_list.index)
     return esf_list
 
 
@@ -282,12 +292,12 @@ def get_esf_info(city, esf_id):
 
             #　交易属性
             trans = base_info.find("div", {"class": "transaction"}).get_text()
-            guapaishijian = None if "挂牌时间" not in trans else trans.split("挂牌时间")[1].split("\n")[0]
-            jiaoyiquanshu = None if "交易权属" not in trans else trans.split("交易权属")[1].split("\n")[0]
-            fangwuyongtu = None if "房屋用途" not in trans else trans.split("房屋用途")[1].split("\n")[0]
-            fangwunianxian = None if "房屋年限" not in trans else trans.split("房屋年限")[1].split("\n")[0]
-            chanquansuoshu = None if "产权所属" not in trans else trans.split("产权所属")[1].split("\n")[0]
-            diyaxinxi = None if "抵押信息" not in trans else trans.split("抵押信息")[1].split("\n")[0]
+            guapaishijian = None if "挂牌时间" not in trans else trans.split("挂牌时间")[1].strip().split("\n")[0]
+            jiaoyiquanshu = None if "交易权属" not in trans else trans.split("交易权属")[1].strip().split("\n")[0]
+            fangwuyongtu = None if "房屋用途" not in trans else trans.split("房屋用途")[1].strip().split("\n")[0]
+            fangwunianxian = None if "房屋年限" not in trans else trans.split("房屋年限")[1].strip().split("\n")[0]
+            chanquansuoshu = None if "产权所属" not in trans else trans.split("产权所属")[1].strip().split("\n")[0]
+            diyaxinxi = None if "抵押信息" not in trans else trans.split("抵押信息")[1].strip().split("\n")[0]
 
             df = pd.DataFrame(index=[esf_id], data=[[http_url, chengqu, quyu, xiaoqu,
                                      huxing, total_price, unit_price, jianzhumianji,
@@ -530,12 +540,12 @@ def get_tongji_plot(filename):
     info = info.sort_index()
     try:
         info.plot(x=pd.to_datetime(info.index), y=['总数', '均价', '成交'],
-                  marker='o', subplots=True, grid=True, figsize=(12,9))
+                  marker='.', subplots=True, grid=True, figsize=(12,9))
         plt.savefig('total.jpg', bbox_inches='tight')
 
         name_list = get_district_name_from_city(CITY)
         info.plot(x=pd.to_datetime(info.index), y=name_list,
-                  marker='o', subplots=True, grid=True, figsize=(12,3*len(name_list)))
+                  marker='.', subplots=True, grid=True, figsize=(12,3*len(name_list)))
         plt.savefig('chengqu.jpg', bbox_inches='tight')
     except Exception as e:
         print("get tongji plot failed", e)
