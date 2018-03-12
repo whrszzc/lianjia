@@ -427,15 +427,16 @@ def get_chengjiao_yesterday(city):
     return chengjiao
 
 def get_lianjia_fangjia_info(city):
-    http_url = 'https://{}.lianjia.com/fangjia'.format(city)
-    bs_obj = get_bs_obj_from_url(http_url)
-    if bs_obj is None:
-        return 0, 0, 0
-    tongji = bs_obj.find("div", {"class": "box-l-b"})
-    lj_all = tongji.find_all("div", {"class": "num"})
-    lj_new = lj_all[0].get_text()
-    lj_ren = lj_all[1].get_text()
-    lj_kan = lj_all[2].get_text()
+    try:
+        http_url = 'https://{}.lianjia.com/fangjia'.format(city)
+        bs_obj = get_bs_obj_from_url(http_url)
+        tongji = bs_obj.find("div", {"class": "box-l-b"})
+        lj_all = tongji.find_all("div", {"class": "num"})
+        lj_new = lj_all[0].get_text()
+        lj_ren = lj_all[1].get_text()
+        lj_kan = lj_all[2].get_text()
+    except Exception as e:
+        lj_new, lj_ren, lj_kan = get_lianjia_fangjia_info(city)
 
     return lj_new, lj_ren, lj_kan
 
